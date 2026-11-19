@@ -48,7 +48,8 @@ def encrypt(plaintext, key, encryption=ALGORITHMS.A256GCM, algorithm=ALGORITHMS.
     if encryption not in ALGORITHMS.SUPPORTED:
         raise JWEError("Algorithm %s not supported." % encryption)
     key = jwk.construct(key, algorithm)
-    encoded_header = _encoded_header(algorithm, encryption, zip, cty, kid)
+    extra_header = _negotiate_alg_header(key, algorithm)
+    encoded_header = _encoded_header(algorithm, encryption, zip, cty, kid, extra_header)
 
     plaintext = _compress(zip, plaintext)
     enc_cek, iv, cipher_text, auth_tag = _encrypt_and_auth(key, algorithm, encryption, zip, plaintext, encoded_header)
@@ -138,13 +139,19 @@ def decrypt(jwe_str, key):
         cek_bytes = _get_key_bytes_from_key(key)
     else:
         try:
-            cek_bytes = key.unwrap_key(encrypted_key)
+            if alg in ALGORITHMS.PBES2_KW:
+                p2s, p2c = _get_pbes2_params(header)
+                cek_bytes = key.unwrap_key(encrypted_key, p2s, p2c)
+            else:
+                cek_bytes = key.unwrap_key(encrypted_key)
 
             # Record whether the CEK could be successfully determined for this
             # recipient or not.
             cek_valid = True
         except NotImplementedError:
             raise JWEError(f"alg {alg} is not implemented")
+        except JWEParseError:
+            raise
         except Exception:
             # Record whether the CEK could be successfully determined for this
             # recipient or not.
@@ -334,7 +341,7 @@ def _jwe_compact_deserialize(jwe_bytes):
     return header, header_segment, encrypted_key, iv, ciphertext, auth_tag
 
 
-def _encoded_header(alg, enc, zip, cty, kid):
+def _encoded_header(alg, enc, zip, cty, kid, extra_header=None):
     """
     Generate an appropriate JOSE header based on the values provided
     Args:
@@ -348,6 +355,8 @@ def _encoded_header(alg, enc, zip, cty, kid):
         bytes: JSON object of header based on input
     """
     header = {"alg": alg, "enc": enc}
+    if extra_header:
+        header.update(extra_header)
     if zip:
         header["zip"] = zip
     if cty:
@@ -360,6 +369,45 @@ def _encoded_header(alg, enc, zip, cty, kid):
         sort_keys=True,
     ).encode("utf-8")
     return base64url_encode(json_header)
+
+
+def _negotiate_alg_header(key, alg):
+    """Negotiate algorithm-specific protected header parameters.
+
+    PBES2 key management needs the "p2s" (salt) and "p2c" (iteration count)
+    parameters to be agreed before the CEK is wrapped, because both the
+    derived KEK and the protected header used as AAD depend on them.
+    """
+    if alg in ALGORITHMS.PBES2_KW:
+        return key.prepare_pbes2_params()
+    return {}
+
+
+def _get_pbes2_params(header):
+    """Extract and validate the PBES2 "p2s"/"p2c" protected header parameters.
+
+    Any well-formed positive iteration count, including the small values used
+    by older tokens, is accepted so legacy ciphertexts remain decryptable.
+    """
+    if "p2s" not in header:
+        raise JWEParseError('PBES2 JWE headers must include a "p2s" parameter')
+    if "p2c" not in header:
+        raise JWEParseError('PBES2 JWE headers must include a "p2c" parameter')
+
+    p2s = header["p2s"]
+    p2c = header["p2c"]
+    if not isinstance(p2s, str):
+        raise JWEParseError('Invalid PBES2 "p2s" header parameter: must be a base64url string')
+    try:
+        p2s_bytes = base64url_decode(p2s.encode("ascii"))
+    except Exception as e:
+        raise JWEParseError('Invalid PBES2 "p2s" header parameter: %s' % e)
+    # RFC 7518 Section 4.8.1.1: the salt input MUST be at least 8 octets.
+    if len(p2s_bytes) < 8:
+        raise JWEParseError('Invalid PBES2 "p2s" header parameter: salt must be at least 8 octets')
+    if isinstance(p2c, bool) or not isinstance(p2c, int) or p2c < 1:
+        raise JWEParseError('Invalid PBES2 "p2c" header parameter: must be a positive integer')
+    return p2s, p2c
 
 
 def _big_endian(int_val):

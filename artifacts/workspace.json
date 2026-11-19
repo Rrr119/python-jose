@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid28686",
+  "B": "/home/dev/feedback/uid28686",
+  "sha": "8bf70b53e94f4b639392c9623f331c9e576fe10d",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "mpdavis",
+    "repo": "python-jose",
+    "sha": "8bf70b53e94f4b639392c9623f331c9e576fe10d"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "python-jose",
+    "cloneUrl": "https://github.com/Rrr119/python-jose.git"
+  },
+  "at": "2026-11-19T16:04:56.256Z"
+}

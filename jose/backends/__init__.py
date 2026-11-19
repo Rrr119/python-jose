@@ -23,4 +23,9 @@ try:
 except ImportError:
     from jose.backends.native import HMACKey  # noqa: F401
 
+try:
+    from jose.backends.pbes2_backend import PBES2Key  # noqa: F401
+except ImportError:
+    PBES2Key = None
+
 from .base import DIRKey  # noqa: F401

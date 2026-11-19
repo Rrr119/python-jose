@@ -27,6 +27,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from jose.backends import PBES2Key  # noqa: F401
+except ImportError:
+    pass
+
 
 def get_key(algorithm):
     if algorithm in ALGORITHMS.KEYS:
@@ -49,6 +54,12 @@ def get_key(algorithm):
         from jose.backends import DIRKey  # noqa: F811
 
         return DIRKey
+    elif algorithm in ALGORITHMS.PBES2_KW:
+        from jose.backends import PBES2Key  # noqa: F811
+
+        if PBES2Key is None:
+            raise JWKError("PBES2 algorithms require the cryptography package")
+        return PBES2Key
     return None
 
 

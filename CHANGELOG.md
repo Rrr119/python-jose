@@ -1,5 +1,15 @@
 # Changelog #
 
+## Unreleased ##
+
+### Features ###
+
+* Implement PBES2 key management for JWE (`PBES2-HS256+A128KW`,
+  `PBES2-HS384+A192KW`, `PBES2-HS512+A256KW`), including automatic
+  negotiation of the `p2s` salt and `p2c` iteration count header
+  parameters, algorithm whitelisting, and decryption of legacy
+  ciphertexts with smaller iteration counts.
+
 ## 3.5.0 -- 2025-05-28 ##
 
 ### News ###
